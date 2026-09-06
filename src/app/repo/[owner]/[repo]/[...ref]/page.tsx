@@ -12,6 +12,7 @@ import { LanguageSection } from "@/components/analysis/language-section";
 import { CommitActivitySection } from "@/components/analysis/commit-activity-section";
 import { PullRequestsSection } from "@/components/analysis/pull-requests-section";
 import { IssuesSection } from "@/components/analysis/issues-section";
+import { AskPanel } from "@/components/analysis/ask-panel";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string; ref: string[] }>;
@@ -37,6 +38,8 @@ export default async function RefAnalysisPage({ params }: PageProps) {
         <RepoHeader meta={meta} refString={refString} />
 
         <OverviewSection commit={commit} />
+
+        <AskPanel owner={owner} repo={repo} sha={commit.sha} />
 
         <div className="grid gap-6 md:grid-cols-2">
           <Suspense fallback={<SectionSkeleton />}>

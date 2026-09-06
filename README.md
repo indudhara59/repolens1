@@ -29,14 +29,17 @@ exposed to the browser.
 | --- | --- |
 | `GITHUB_TOKEN` | [GitHub → Settings → Developer settings → Fine-grained tokens](https://github.com/settings/personal-access-tokens/new). Create a token with **no repository access is needed for public repos**, but if prompted, grant "Public Repositories (read-only)". This just raises your GitHub API rate limit from 60 to 5,000 requests/hour. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | [Upstash Console](https://console.upstash.com/redis) → Create Database (free tier) → REST API section. Used to cache GitHub API responses. |
-| `UPSTASH_VECTOR_REST_URL` / `UPSTASH_VECTOR_REST_TOKEN` | [Upstash Console](https://console.upstash.com/vector) → Create Index (free tier) → REST API section. Used in a later stage to store code embeddings for RAG. |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) → Create API key (free tier). Used in a later stage for the chat + embeddings features. |
+| `UPSTASH_VECTOR_REST_URL` / `UPSTASH_VECTOR_REST_TOKEN` | [Upstash Console](https://console.upstash.com/vector) → Create Index (free tier) → REST API section. **Create the index with 768 dimensions and cosine similarity** — that's the output size of Gemini's `text-embedding-004` model used for indexing code chunks. |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) → Create API key (free tier). Used for embeddings now, and chat answer generation in a later stage. |
 
 ## Project status
 
-This is stage 1 of a 5-stage build: project scaffolding, the GitHub data
-layer, and a repo landing page. Analysis views and the RAG chat come in later
-stages.
+Stage 3 of a 5-stage build: project scaffolding, GitHub data layer, the
+analysis dashboard, and now the repo indexing pipeline (Git tree → filtered
+source files → chunked → embedded → Upstash Vector, namespaced per
+`owner/repo@sha`) behind the "Ask about this code" panel. The panel indexes
+a repo on demand with a live progress bar; actually answering questions over
+the indexed code is a later stage.
 
 ## Deploy on Vercel
 

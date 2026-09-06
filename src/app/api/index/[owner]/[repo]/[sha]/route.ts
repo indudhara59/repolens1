@@ -1,0 +1,30 @@
+import { NextResponse } from "next/server";
+import { advanceIndexingJob, getJobStatus } from "@/lib/indexing/job";
+
+export const maxDuration = 60;
+
+interface RouteParams {
+  params: Promise<{ owner: string; repo: string; sha: string }>;
+}
+
+export async function GET(_request: Request, { params }: RouteParams) {
+  const { owner, repo, sha } = await params;
+  try {
+    const status = await getJobStatus({ owner, repo }, sha);
+    return NextResponse.json(status ?? { status: "pending", totalFiles: 0, doneFiles: 0 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to check indexing status.";
+    return NextResponse.json({ status: "error", totalFiles: 0, doneFiles: 0, error: message }, { status: 500 });
+  }
+}
+
+export async function POST(_request: Request, { params }: RouteParams) {
+  const { owner, repo, sha } = await params;
+  try {
+    const status = await advanceIndexingJob({ owner, repo }, sha);
+    return NextResponse.json(status);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Indexing failed.";
+    return NextResponse.json({ status: "error", totalFiles: 0, doneFiles: 0, error: message }, { status: 500 });
+  }
+}

@@ -23,7 +23,7 @@ export { parseGitHubUrl } from "@/lib/github-url";
 
 let client: Octokit | null = null;
 
-function getOctokit(): Octokit {
+export function getOctokit(): Octokit {
   if (!client) {
     client = new Octokit({
       auth: process.env.GITHUB_TOKEN || undefined,
