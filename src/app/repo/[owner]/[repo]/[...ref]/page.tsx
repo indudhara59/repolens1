@@ -13,6 +13,9 @@ import { CommitActivitySection } from "@/components/analysis/commit-activity-sec
 import { PullRequestsSection } from "@/components/analysis/pull-requests-section";
 import { IssuesSection } from "@/components/analysis/issues-section";
 import { AskPanel } from "@/components/analysis/ask-panel";
+import { ChangedFilesSection } from "@/components/analysis/changed-files-section";
+import { ChatProvider } from "@/components/analysis/chat-provider";
+import { ChatSheet } from "@/components/analysis/chat-sheet";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string; ref: string[] }>;
@@ -35,32 +38,38 @@ export default async function RefAnalysisPage({ params }: PageProps) {
 
     return (
       <main className="mx-auto max-w-4xl space-y-6 px-6 py-12">
-        <RepoHeader meta={meta} refString={refString} />
+        <ChatProvider owner={owner} repo={repo} sha={commit.sha}>
+          <RepoHeader meta={meta} refString={refString} />
 
-        <OverviewSection commit={commit} />
+          <OverviewSection commit={commit} />
 
-        <AskPanel owner={owner} repo={repo} sha={commit.sha} />
+          <ChangedFilesSection files={commit.files} />
 
-        <div className="grid gap-6 md:grid-cols-2">
+          <AskPanel />
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<SectionSkeleton />}>
+              <ContributorsSection owner={owner} repo={repo} />
+            </Suspense>
+            <Suspense fallback={<SectionSkeleton />}>
+              <LanguageSection owner={owner} repo={repo} />
+            </Suspense>
+          </div>
+
           <Suspense fallback={<SectionSkeleton />}>
-            <ContributorsSection owner={owner} repo={repo} />
+            <CommitActivitySection owner={owner} repo={repo} refString={refString} />
           </Suspense>
+
           <Suspense fallback={<SectionSkeleton />}>
-            <LanguageSection owner={owner} repo={repo} />
+            <PullRequestsSection owner={owner} repo={repo} refString={refString} before={before} />
           </Suspense>
-        </div>
 
-        <Suspense fallback={<SectionSkeleton />}>
-          <CommitActivitySection owner={owner} repo={repo} refString={refString} />
-        </Suspense>
+          <Suspense fallback={<SectionSkeleton />}>
+            <IssuesSection owner={owner} repo={repo} refString={refString} before={before} />
+          </Suspense>
 
-        <Suspense fallback={<SectionSkeleton />}>
-          <PullRequestsSection owner={owner} repo={repo} refString={refString} before={before} />
-        </Suspense>
-
-        <Suspense fallback={<SectionSkeleton />}>
-          <IssuesSection owner={owner} repo={repo} refString={refString} before={before} />
-        </Suspense>
+          <ChatSheet owner={owner} repo={repo} />
+        </ChatProvider>
       </main>
     );
   } catch (error) {

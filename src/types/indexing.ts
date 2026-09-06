@@ -30,3 +30,16 @@ export interface IndexJobDoc {
   doneFiles: number;
   error?: string;
 }
+
+export interface ChatSource {
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  url: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  sources?: ChatSource[];
+}

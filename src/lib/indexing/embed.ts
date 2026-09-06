@@ -40,3 +40,12 @@ export async function embedChunks(texts: string[]): Promise<number[][]> {
 
   return vectors;
 }
+
+export async function embedQuery(text: string): Promise<number[]> {
+  const model = getModel();
+  const { embedding } = await model.embedContent({
+    content: { role: "user", parts: [{ text }] },
+    taskType: TaskType.RETRIEVAL_QUERY,
+  });
+  return embedding.values;
+}

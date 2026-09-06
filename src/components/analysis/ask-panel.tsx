@@ -1,22 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleAlert, Loader2, MessageCircle, SendHorizontal } from "lucide-react";
+import { CircleAlert, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useIndexJob } from "@/hooks/use-index-job";
+import { useChatWorkspace } from "@/components/analysis/chat-provider";
 
-interface AskPanelProps {
-  owner: string;
-  repo: string;
-  sha: string;
-}
-
-export function AskPanel({ owner, repo, sha }: AskPanelProps) {
-  const { status, checking, start } = useIndexJob({ owner, repo, sha });
+export function AskPanel() {
+  const { index, setSheetOpen } = useChatWorkspace();
+  const { status, checking, start } = index;
   const [autoResumed, setAutoResumed] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -59,14 +53,9 @@ export function AskPanel({ owner, repo, sha }: AskPanelProps) {
           </div>
         ) : status.status === "done" ? (
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <Input placeholder="Ask a question about this code..." disabled />
-              <Button size="icon" disabled>
-                <SendHorizontal />
-              </Button>
-            </div>
+            <Button onClick={() => setSheetOpen(true)}>Open chat</Button>
             <p className="text-xs text-muted-foreground">
-              This repo is indexed — answering questions arrives in a later stage.
+              This repo is indexed — ask questions about the code at this commit.
             </p>
           </div>
         ) : status.status === "running" ? (
