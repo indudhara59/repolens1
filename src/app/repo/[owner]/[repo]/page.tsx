@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import type { Metadata } from "next";
 import { Star, GitFork, CircleAlert, ExternalLink } from "lucide-react";
 import { getRepoMeta, listBranches, listCommits, listReleases } from "@/lib/github";
 import { GitHubServiceError } from "@/types/github";
@@ -12,6 +13,19 @@ import { formatNumber } from "@/lib/format";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { owner, repo } = await params;
+  try {
+    const meta = await getRepoMeta({ owner, repo });
+    return {
+      title: meta.fullName,
+      description: meta.description ?? `Browse releases, commits, and analysis for ${meta.fullName}.`,
+    };
+  } catch {
+    return { title: `${owner}/${repo}` };
+  }
 }
 
 export default async function RepoPage({ params }: PageProps) {

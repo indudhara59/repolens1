@@ -4,6 +4,7 @@ import { streamText } from "ai";
 import { getJobStatus } from "@/lib/indexing/job";
 import { embedQuery } from "@/lib/indexing/embed";
 import { getVectorNamespaceClient } from "@/lib/indexing/vector";
+import { checkRateLimit, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import type { ChatSource, IndexedChunk } from "@/types/indexing";
 
 export const maxDuration = 60;
@@ -42,6 +43,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const message = body.message?.trim();
   if (!message) {
     return NextResponse.json({ error: "Question cannot be empty." }, { status: 400 });
+  }
+
+  const rate = await checkRateLimit("chat", getClientIp(request));
+  if (!rate.success) {
+    return NextResponse.json(
+      { error: RATE_LIMIT_MESSAGE },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
   try {

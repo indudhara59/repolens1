@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { advanceIndexingJob, getJobStatus } from "@/lib/indexing/job";
+import { checkRateLimit, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
 
@@ -18,8 +19,17 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   const { owner, repo, sha } = await params;
+
+  const rate = await checkRateLimit("index", getClientIp(request));
+  if (!rate.success) {
+    return NextResponse.json(
+      { status: "error", totalFiles: 0, doneFiles: 0, error: RATE_LIMIT_MESSAGE },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const status = await advanceIndexingJob({ owner, repo }, sha);
     return NextResponse.json(status);

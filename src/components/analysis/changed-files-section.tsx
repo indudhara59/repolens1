@@ -30,9 +30,9 @@ export function ChangedFilesSection({ files }: ChangedFilesSectionProps) {
         {files.map((file) => (
           <div
             key={file.filename}
-            className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+            className="flex flex-col gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <Badge variant={STATUS_VARIANT[file.status] ?? "outline"} className="shrink-0 font-normal">
                 {file.status}
               </Badge>

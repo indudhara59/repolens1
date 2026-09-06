@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { CircleAlert } from "lucide-react";
 import { getCommitDetail, getRepoMeta } from "@/lib/github";
 import { GitHubServiceError } from "@/types/github";
@@ -23,6 +24,20 @@ interface PageProps {
 
 function SectionSkeleton() {
   return <Skeleton className="h-64 w-full rounded-xl" />;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { owner, repo, ref } = await params;
+  const refString = ref.join("/");
+  try {
+    const commit = await getCommitDetail({ owner, repo }, refString);
+    return {
+      title: `${owner}/${repo} @ ${commit.sha.slice(0, 7)}`,
+      description: commit.message.split("\n")[0],
+    };
+  } catch {
+    return { title: `${owner}/${repo} @ ${refString}` };
+  }
 }
 
 export default async function RefAnalysisPage({ params }: PageProps) {
