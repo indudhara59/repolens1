@@ -2,11 +2,15 @@ import "server-only";
 import { Octokit } from "octokit";
 import { cached, CACHE_TTL } from "@/lib/redis";
 import {
+  Branch,
+  CommitActivityPoint,
   CommitDetail,
   CommitSummary,
+  ContributorStat,
   GitHubServiceError,
   IssueState,
   IssueSummary,
+  LanguageStat,
   Paginated,
   PullRequestState,
   PullRequestSummary,
@@ -21,7 +25,17 @@ let client: Octokit | null = null;
 
 function getOctokit(): Octokit {
   if (!client) {
-    client = new Octokit({ auth: process.env.GITHUB_TOKEN || undefined });
+    client = new Octokit({
+      auth: process.env.GITHUB_TOKEN || undefined,
+      // By default octokit retries once after waiting out the *entire*
+      // rate-limit window (up to an hour), which would hang a request far
+      // past any reasonable timeout. We want to fail fast instead and let
+      // toServiceError()/cached() surface a clear rate_limited error.
+      throttle: {
+        onRateLimit: () => false,
+        onSecondaryRateLimit: () => false,
+      },
+    });
   }
   return client;
 }
@@ -291,6 +305,201 @@ export async function listIssues(
           page,
           perPage,
           hasNextPage: data.length === perPage,
+        };
+      } catch (error) {
+        throw toServiceError(error);
+      }
+    }
+  );
+}
+
+export async function listBranches(ref: RepoRef): Promise<Branch[]> {
+  return cached(`gh:branches:${ref.owner}/${ref.repo}`, CACHE_TTL.RELEASES, async () => {
+    try {
+      const { data } = await getOctokit().rest.repos.listBranches({
+        owner: ref.owner,
+        repo: ref.repo,
+        per_page: 100,
+      });
+      return data.map((b) => ({ name: b.name, commitSha: b.commit.sha }));
+    } catch (error) {
+      throw toServiceError(error);
+    }
+  });
+}
+
+export async function listContributors(
+  ref: RepoRef,
+  limit = 10
+): Promise<ContributorStat[]> {
+  return cached(
+    `gh:contributors:${ref.owner}/${ref.repo}:${limit}`,
+    CACHE_TTL.RELEASES,
+    async () => {
+      try {
+        const response = await getOctokit().rest.repos.listContributors({
+          owner: ref.owner,
+          repo: ref.repo,
+          per_page: limit,
+        });
+        // GitHub returns 202 with an empty body while it computes stats for
+        // repos that haven't been requested before; an empty array covers
+        // both that case and a genuinely contributor-less repo.
+        if (!response.data) return [];
+        return response.data
+          .filter((c): c is typeof c & { login: string } => Boolean(c.login))
+          .map((c) => ({
+            login: c.login,
+            avatarUrl: c.avatar_url ?? "",
+            htmlUrl: c.html_url ?? `https://github.com/${c.login}`,
+            contributions: c.contributions,
+          }));
+      } catch (error) {
+        throw toServiceError(error);
+      }
+    }
+  );
+}
+
+export async function getLanguages(ref: RepoRef): Promise<LanguageStat[]> {
+  return cached(`gh:languages:${ref.owner}/${ref.repo}`, CACHE_TTL.RELEASES, async () => {
+    try {
+      const { data } = await getOctokit().rest.repos.listLanguages({
+        owner: ref.owner,
+        repo: ref.repo,
+      });
+      const total = Object.values(data).reduce((sum, bytes) => sum + bytes, 0);
+      if (total === 0) return [];
+      return Object.entries(data)
+        .map(([language, bytes]) => ({
+          language,
+          bytes,
+          percentage: (bytes / total) * 100,
+        }))
+        .sort((a, b) => b.bytes - a.bytes);
+    } catch (error) {
+      throw toServiceError(error);
+    }
+  });
+}
+
+function startOfIsoWeek(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getUTCDay();
+  const diff = (day === 0 ? -6 : 1) - day; // shift to Monday
+  d.setUTCDate(d.getUTCDate() + diff);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+export async function getCommitActivity(
+  ref: RepoRef,
+  refString: string
+): Promise<CommitActivityPoint[]> {
+  return cached(
+    `gh:commit-activity:${ref.owner}/${ref.repo}:${refString}`,
+    CACHE_TTL.COMMITS,
+    async () => {
+      const dates: string[] = [];
+      for (let page = 1; page <= 3; page++) {
+        const result = await listCommits(ref, { branch: refString, page, perPage: 100 });
+        for (const item of result.items) {
+          if (item.date) dates.push(item.date);
+        }
+        if (!result.hasNextPage) break;
+      }
+
+      const counts = new Map<string, number>();
+      for (const date of dates) {
+        const week = startOfIsoWeek(date);
+        counts.set(week, (counts.get(week) ?? 0) + 1);
+      }
+
+      return Array.from(counts.entries())
+        .map(([weekStart, count]) => ({ weekStart, count }))
+        .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    }
+  );
+}
+
+export async function listPullRequestsMergedBefore(
+  ref: RepoRef,
+  before: string,
+  options: { page?: number; perPage?: number } = {}
+): Promise<Paginated<PullRequestSummary>> {
+  const { page = 1, perPage = 20 } = options;
+  return cached(
+    `gh:prs-before:${ref.owner}/${ref.repo}:${before}:${page}:${perPage}`,
+    CACHE_TTL.PRS,
+    async () => {
+      try {
+        const q = `repo:${ref.owner}/${ref.repo} is:pr is:merged merged:<=${before}`;
+        const { data } = await getOctokit().rest.search.issuesAndPullRequests({
+          q,
+          sort: "created",
+          order: "desc",
+          page,
+          per_page: perPage,
+        });
+        return {
+          items: data.items.map((item) => ({
+            number: item.number,
+            title: item.title,
+            state: item.state,
+            merged: true,
+            authorLogin: item.user?.login ?? null,
+            createdAt: item.created_at,
+            mergedAt: item.pull_request?.merged_at ?? null,
+            closedAt: item.closed_at,
+            htmlUrl: item.html_url,
+            // Not returned by the search API; not needed for this view.
+            nearestCommitSha: null,
+          })),
+          page,
+          perPage,
+          hasNextPage: data.items.length === perPage,
+        };
+      } catch (error) {
+        throw toServiceError(error);
+      }
+    }
+  );
+}
+
+export async function listIssuesBefore(
+  ref: RepoRef,
+  before: string,
+  options: { state?: IssueState; page?: number; perPage?: number } = {}
+): Promise<Paginated<IssueSummary>> {
+  const { state = "all", page = 1, perPage = 20 } = options;
+  return cached(
+    `gh:issues-before:${ref.owner}/${ref.repo}:${state}:${before}:${page}:${perPage}`,
+    CACHE_TTL.ISSUES,
+    async () => {
+      try {
+        const stateQualifier = state === "all" ? "" : ` state:${state}`;
+        const q = `repo:${ref.owner}/${ref.repo} is:issue created:<=${before}${stateQualifier}`;
+        const { data } = await getOctokit().rest.search.issuesAndPullRequests({
+          q,
+          sort: "created",
+          order: "desc",
+          page,
+          per_page: perPage,
+        });
+        return {
+          items: data.items.map((issue) => ({
+            number: issue.number,
+            title: issue.title,
+            state: issue.state,
+            authorLogin: issue.user?.login ?? null,
+            createdAt: issue.created_at,
+            closedAt: issue.closed_at,
+            htmlUrl: issue.html_url,
+            commentsCount: issue.comments,
+          })),
+          page,
+          perPage,
+          hasNextPage: data.items.length === perPage,
         };
       } catch (error) {
         throw toServiceError(error);

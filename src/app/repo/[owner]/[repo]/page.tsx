@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Star, GitFork, CircleAlert, ExternalLink } from "lucide-react";
-import { getRepoMeta } from "@/lib/github";
+import { getRepoMeta, listBranches, listCommits, listReleases } from "@/lib/github";
 import { GitHubServiceError } from "@/types/github";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { RepoBrowseTabs } from "@/components/repo-browse-tabs";
+import { formatNumber } from "@/lib/format";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string }>;
@@ -17,6 +19,11 @@ export default async function RepoPage({ params }: PageProps) {
 
   try {
     const meta = await getRepoMeta({ owner, repo });
+    const [branches, releases, commits] = await Promise.all([
+      listBranches({ owner, repo }),
+      listReleases({ owner, repo }),
+      listCommits({ owner, repo }, { branch: meta.defaultBranch }),
+    ]);
 
     return (
       <main className="mx-auto max-w-3xl px-6 py-12">
@@ -49,11 +56,11 @@ export default async function RepoPage({ params }: PageProps) {
               {meta.language && <Badge variant="secondary">{meta.language}</Badge>}
               <Badge variant="outline" className="gap-1">
                 <Star className="size-3.5" />
-                {meta.stars.toLocaleString()}
+                {formatNumber(meta.stars)}
               </Badge>
               <Badge variant="outline" className="gap-1">
                 <GitFork className="size-3.5" />
-                {meta.forks.toLocaleString()}
+                {formatNumber(meta.forks)}
               </Badge>
               {meta.license && <Badge variant="outline">{meta.license}</Badge>}
               <Badge variant="outline">default branch: {meta.defaultBranch}</Badge>
@@ -71,10 +78,14 @@ export default async function RepoPage({ params }: PageProps) {
 
             <Separator />
 
-            <p className="text-sm text-muted-foreground">
-              Releases, commits, pull requests, and issue analysis for this
-              repo are coming in the next stage.
-            </p>
+            <RepoBrowseTabs
+              owner={owner}
+              repo={repo}
+              defaultBranch={meta.defaultBranch}
+              branches={branches}
+              initialReleases={releases}
+              initialCommits={commits}
+            />
           </CardContent>
         </Card>
       </main>

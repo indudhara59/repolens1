@@ -89,6 +89,29 @@ export interface Paginated<T> {
   hasNextPage: boolean;
 }
 
+export interface Branch {
+  name: string;
+  commitSha: string;
+}
+
+export interface ContributorStat {
+  login: string;
+  avatarUrl: string;
+  htmlUrl: string;
+  contributions: number;
+}
+
+export interface LanguageStat {
+  language: string;
+  bytes: number;
+  percentage: number;
+}
+
+export interface CommitActivityPoint {
+  weekStart: string;
+  count: number;
+}
+
 export class GitHubServiceError extends Error {
   constructor(
     message: string,

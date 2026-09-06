@@ -33,3 +33,12 @@ export function parseGitHubUrl(input: string): RepoRef | null {
 
   return { owner, repo };
 }
+
+/**
+ * Encodes a ref (tag/branch/SHA, possibly containing "/") for use as a
+ * multi-segment path in a Next.js catch-all route, encoding each segment
+ * individually so literal "/" characters still act as path separators.
+ */
+export function refToPath(refString: string): string {
+  return refString.split("/").map(encodeURIComponent).join("/");
+}
